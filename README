@@ -1,0 +1,180 @@
+=========
+Uj traceroute meres erkezik
+=========
+
+0) Fajlok mentese:
+   Legyen a forras neve: {forras} (pl: foodweb, internet, airport, stb)
+   /mnt/ADAT/measurements3/data/{forras}/raw/tracerouteok_eredeti_formaban
+
+1) Van a tipusanak megfelelo osztaly a tools/network_wrappers mappaban?
+   Ha igen, akkor a megfelelo osztalyban fel kell kesziteni a
+      - get_traceroutes
+      - load_topology
+   fuggvenyeket, hogy kezelje, melyik forrasra erkezik a keres
+
+   Ha nincs, akkor letre kell hozni megfelelo neven egy osztaly, ami a kovetkezo
+   ket fuggvenyt kell implementalja
+       - get_traceroutes -- ez mekapja paramterkent az eleresi utjat a
+                            traceroute filenak, es vissza kell adnia egy
+                            [TRACE, TRACE, ...] formaban, ahol TRACE=[n, n, ...]
+                            ahol n egy csomopon azonositoja stringben
+       - load_topology -- ha van egy topologiank valamilyen formaban es ebbol
+                          a node_rank algoritmussal akarunk elcimkezest vegezni
+                          akkor hivodik meg, paramtere a topologia fajl/mappa
+                          eleresi utja.
+
+2) Konvertaljuk at a nyers adatokat az egyseges formatumokba.
+
+     - Trace eseten
+       jsonban mentett tomb, aminek minden eleme egy lista a tracekben egymas
+       koveto csomopontokrol.(pl.: [ [A, B, C], [D, C, A], .... ])
+
+     - TOPO eseten
+       A caidasok algoritmusa altal hasznalt formatum: n|m|t
+       ahol n es m egy node azonosito (megegyezik a Trace-ben talalhato azonositoval)
+       t pedig a link tipusa: 0 = peer, -1 = customer-to-provider.
+
+   A lehetseges topologiak:
+     - TOPO_CAIDA
+       A tracerouteokat beadjuk a caida topologia generalo es elcimkezo
+       algoritmusanak
+       
+     - TOPO_CAIDA_RANK
+       A topo_caida altal cimkezett eleket a rank alapu cimkezessel felulcsapva
+       ujra cimkezzuk
+
+     - TOPO_TRACE_RANK
+       A tracerouteokbol generalunk grafot es abbol a rankos szamitgatassal
+       cimkezunk.
+
+     - TOPO_ORIGINAL
+       Valamilyen topologiat tarolo formabol (edge list, matrix,
+       stb) az egyseges formatumba konvertalja
+
+   TRACE
+        python converter.py -t {forras} --convert traceroutes  --traceroutes /mnt/ADAT/measurements3/data/{forras}/raw/eredeti_tracerouteok --json-traces /mnt/ADAT/measurements3/data/{forras}/converted/traceroutes
+
+   TOPO_CAIDA: convertalo hasznalat nyers traceroute file meglete eseten:
+   
+        python converter.py -t {forras} --json-traces /mnt/ADAT/measurements3/data/{forras}/converted/traceroutes --traceroutes /mnt/ADAT/measurements3/data/{forras}/raw/eredeti_tracerouteok --network-output /mnt/ADAT/measurements3/data/{forras}/converted/topo_caida --caida-folder /mnt/ADAT/measurements3/scripts/caida_labeling/
+
+   TOPO_ORIGINAL: letoltott grafbol generalt topologia atalakitasa az egyseges formatumba
+
+        python converter.py -t {forras} --convert topology --topo-source graph --topology /mnt/ADAT/measurements3/data/{forras}/raw/original_graph_file --json-traces /dev/null --traceroutes /dev/null --network-output /mnt/ADAT/measurements3/data/{forras}/converted/topo_original.gml
+
+   TOPO_CAIDA_RANK: hozzuk letre a caida_rank topologia fajlt, ami a caida altal generalt
+        halozatot ujracimkezi a node_rank algoritmussal.
+
+        python converter.py -t {forras} --convert topology --json-traces /mnt/ADAT/measurements3/data/{forras}/converted/traceroutes --topology /mnt/ADAT/measurements3/data/{forras}/converted/topo_caida --topo-source inferred --network-output /mnt/ADAT/measurements3/data/{forras}/converted/topo_caida_rank.gml
+
+   TOPO_TRACE_RANK: a tracerouteokbol generalunk grafot es elcimkezest is vegzunk
+                    rogton
+
+        python converter.py -t {forras} --convert topology --json-traces /mnt/ADAT/measurements3/data/{forras}/converted/traceroutes --topology /dev/null --topo-source traceroutes --network-output /mnt/ADAT/measurements3/data/{forras}/converted/topo_trace_rank.gml
+
+   2.A) Az elkeszult topologiak, az elek cimkezesenek modjat adjak meg. Ebbol
+        kell elkesziteni az 'uj' formatum szerinti graf leirast, ami az elek
+        cimkezeset tartalmazo listabol egy grafot keszit, ami automatikusan
+        ranggal latja el a nodeokat, ugy, hogy:
+          * minden customer-provider elnel a provider rangja magasabb mint
+            mint a customere
+          * a peer elek vegpontjain levo node-ok rangja egyforma.
+        A node-ok rangjait a csomopontok attributumaban tarolja, es ezt lehet
+        hasznalni az elek 'iranyitasanak' kitalalsara (ki a customer, ki a
+        provider, ki a peer). Az igy generalt graf iranyitatlan es nincsenek
+        duplikalt elek vagy self-loopok. Alkalmas mas metrikak (pl closeness)
+        egyideju alkalmazasara az iranyitasok kitalalasanal.
+
+        python converter.py -t {forras} --convert labeling --json-traces /dev/null --topology /mnt/ADAT/measurements3/data/{forras}/converted/topo --network-output /mnt/ADAT/measurements3/data/{forras}/converted/topo_prelabeled.gml
+
+
+3) Tracerouteok szurese bizonyos parameterek menten
+
+   Hogy kisebb legyen a felesleges szamolgatas, erdemes kiszurni azokat a
+   traceroute-okat, amikben loop van (ketszer elofordul ugyan az a hop),
+   illetve amik nem leteznek az adott topologiaban (ezekrol ugy sem tudunk
+   semmit sem mondani)
+
+   python filter.py /mnt/ADAT/measurements3/data/{forras}/converted/topo_caida_rank /mnt/ADAT/measurements3/data/{forras}/converted/traceroutes --filter loop+ex /mnt/ADAT/measurements3/data/{forras}/filtered/loop_ex_topo_caida_rank
+
+4) Meta-adatok generalasa az egyes tracekhez
+
+   Hogy ne kelljen minden parameterre halmazokat generalni es azoknak a
+   metszeteit es kulonbsegeit nezegetni, egyszerubb minde tracehez legeneralni
+   olyan metaadatokat, mint hogy VF-e, illetve mi a legrovidebb ut a ket
+   vegpontja kozott. Ezzel egy olyan adatbazist kapunk amiben konnyen
+   tesztelhetoek bizonyos szuresek milyen hatekonyak lennenek, mennyire tartanak
+   meg az eredeti utvonalat. Az adatbazis felepitesere a trace_meta_builder
+   script szolgal. Az egyes eredmenyeket kiirja a standrad inputra tablazat
+   formajaban, a vegen egy osszegzest is kiad, es az adatbazis json formatumban
+   lementi a parameterken megadott fajlba.
+
+   python trace_meta_builder.py /mnt/ADAT/measurements3/data/{forras}/converted/topo_caida_rank /mnt/ADAT/measurements3/data/{forras}/filtered/loop_ex_topo_caida_rank /mnt/ADAT/measurements3/data/{forras}/results/loop_ex_topo_caida_rank_meta.json
+   
+
+ 5) Statisztika lekerdezese:
+ 
+    python statistics.py /mnt/ADAT/measurements-route/data/{forras}/converted/topo_original.gml /mnt/ADAT/measurements-route/data/{forras}/filtered/loop_ex_topo_original /mnt/ADAT/measurements-route/data/{forras}/results/loop_ex_topo_original_meta.json /mnt/ADAT/measurements-route/data/{forras}/stats/{forras}_stats_      
+
+
+   
+
+
+1. Convert
+   A kulonbozo forrasokbol szarmazo adatok egyseges furmatumba konvertalasa.
+
+2. Filter
+   Kulonbozo filterekkel egy forrasbol az adatok kivalogatasa es mentese
+   egy masik helyre (JSON formatum)
+
+3. Path prediction
+   Megadott network forrasok es tracerouteok alapjan a valos meresek vegpontjai
+   kozott utvonal joslas probalgatasa.
+
+
+
+
+
++++++++++++++++++++++++++++++++++++++++++++++++
+
+                A R C H I V E S
+
++++++++++++++++++++++++++++++++++++++++++++++++
+
+echo FW
+echo 'CAIDA'
+python vf_lp_ratio.py /mnt/ADAT/measurements3/data/foodweb/converted/topo_caida /mnt/ADAT/measurements3/data/foodweb/converted/traceroutes /mnt/ADAT/measurements3/data/foodweb/filtered/loop_ex_vf_topo_caida /mnt/ADAT/measurements3/data/foodweb/filtered/loop_ex_vf_topo_caida /dev/null
+echo 'CAIDA_RANK'
+python vf_lp_ratio.py /mnt/ADAT/measurements3/data/foodweb/converted/topo_caida_rank /mnt/ADAT/measurements3/data/foodweb/converted/traceroutes /mnt/ADAT/measurements3/data/foodweb/filtered/loop_ex_vf_topo_caida_rank /mnt/ADAT/measurements3/data/foodweb/filtered/loop_ex_vf_topo_caida /dev/null
+echo 'CAIDA_RANK_80%'
+python vf_lp_ratio.py /mnt/ADAT/measurements3/data/foodweb/converted/topo_caida_rank_08_peer /mnt/ADAT/measurements3/data/foodweb/converted/traceroutes /mnt/ADAT/measurements3/data/foodweb/filtered/loop_ex_vf_topo_caida_rank_08_peer /mnt/ADAT/measurements3/data/foodweb/filtered/loop_ex_vf_topo_caida /dev/null
+echo 'RANK'
+python vf_lp_ratio.py /mnt/ADAT/measurements3/data/foodweb/converted/topo_rank /mnt/ADAT/measurements3/data/foodweb/converted/traceroutes /mnt/ADAT/measurements3/data/foodweb/filtered/loop_ex_vf_topo_rank /mnt/ADAT/measurements3/data/foodweb/filtered/loop_ex_vf_topo_rank /dev/null
+echo 'RANK_RANK_80%'
+python vf_lp_ratio.py /mnt/ADAT/measurements3/data/foodweb/converted/topo_rank_rank_08_peer /mnt/ADAT/measurements3/data/foodweb/converted/traceroutes /mnt/ADAT/measurements3/data/foodweb/filtered/loop_ex_vf_topo_rank_rank_08_peer /mnt/ADAT/measurements3/data/foodweb/filtered/loop_ex_vf_topo_caida /dev/null
+
+
+echo AIRPORT
+echo 'CAIDA'
+python vf_lp_ratio.py /mnt/ADAT/measurements3/data/airport/converted/topo_caida /mnt/ADAT/measurements3/data/airport/converted/traceroutes /mnt/ADAT/measurements3/data/airport/filtered/loop_ex_vf_topo_caida /mnt/ADAT/measurements3/data/airport/filtered/loop_ex_vf_topo_caida /dev/null
+echo 'CAIDA_RANK'
+python vf_lp_ratio.py /mnt/ADAT/measurements3/data/airport/converted/topo_caida_rank /mnt/ADAT/measurements3/data/airport/converted/traceroutes /mnt/ADAT/measurements3/data/airport/filtered/loop_ex_vf_topo_caida_rank /mnt/ADAT/measurements3/data/airport/filtered/loop_ex_vf_topo_caida /dev/null
+echo 'CAIDA_RANK_80%'
+python vf_lp_ratio.py /mnt/ADAT/measurements3/data/airport/converted/topo_caida_rank_08_peer /mnt/ADAT/measurements3/data/airport/converted/traceroutes /mnt/ADAT/measurements3/data/airport/filtered/loop_ex_vf_topo_caida_rank_08_peer /mnt/ADAT/measurements3/data/airport/filtered/loop_ex_vf_topo_caida /dev/null
+echo 'RANK'
+python vf_lp_ratio.py /mnt/ADAT/measurements3/data/airport/converted/topo_rank /mnt/ADAT/measurements3/data/airport/converted/traceroutes /mnt/ADAT/measurements3/data/airport/filtered/loop_ex_vf_topo_rank /mnt/ADAT/measurements3/data/airport/filtered/loop_ex_vf_topo_caida /dev/null
+echo 'RANK_RANK_80%'
+python vf_lp_ratio.py /mnt/ADAT/measurements3/data/airport/converted/topo_rank_rank_08_peer /mnt/ADAT/measurements3/data/airport/converted/traceroutes /mnt/ADAT/measurements3/data/airport/filtered/loop_ex_vf_topo_rank_rank_08_peer /mnt/ADAT/measurements3/data/airport/filtered/loop_ex_vf_topo_caida /dev/null
+
+
+echo INTERNET
+echo 'CAIDA'
+python vf_lp_ratio.py /mnt/ADAT/measurements3/data/internet/converted/topo_caida_dnszone /mnt/ADAT/measurements3/data/internet/converted/traceroutes_dnszone /mnt/ADAT/measurements3/data/internet/filtered/loop_ex_vf_topo_caida_dnszone /mnt/ADAT/measurements3/data/internet/filtered/loop_ex_vf_topo_caida_dnszone /dev/null
+echo 'CAIDA_RANK'
+python vf_lp_ratio.py /mnt/ADAT/measurements3/data/internet/converted/topo_caida_rank_dnszone /mnt/ADAT/measurements3/data/internet/converted/traceroutes_dnszone /mnt/ADAT/measurements3/data/internet/filtered/loop_ex_vf_topo_caida_rank_dnszone /mnt/ADAT/measurements3/data/internet/filtered/loop_ex_vf_topo_caida_dnszone /dev/null
+echo 'CAIDA_RANK_80%'
+python vf_lp_ratio.py /mnt/ADAT/measurements3/data/internet/converted/topo_caida_rank_08_peer_dnszone /mnt/ADAT/measurements3/data/internet/converted/traceroutes_dnszone /mnt/ADAT/measurements3/data/internet/filtered/loop_ex_vf_topo_caida_rank_08_peer_dnszone /mnt/ADAT/measurements3/data/internet/filtered/loop_ex_vf_topo_caida_dnszone /dev/null
+echo 'RANK'
+python vf_lp_ratio.py /mnt/ADAT/measurements3/data/internet/converted/topo_rank /mnt/ADAT/measurements3/data/internet/converted/traceroutes_dnszone /mnt/ADAT/measurements3/data/internet/filtered/loop_ex_vf_topo_rank_dnszone /mnt/ADAT/measurements3/data/internet/filtered/loop_ex_vf_topo_caida_dnszone /dev/null
+echo 'RANK_RANK_80%'
+python vf_lp_ratio.py /mnt/ADAT/measurements3/data/internet/converted/topo_rank_rank_08_peer /mnt/ADAT/measurements3/data/internet/converted/traceroutes_dnszone /mnt/ADAT/measurements3/data/internet/filtered/loop_ex_vf_topo_rank_rank_08_peer_dnszone /mnt/ADAT/measurements3/data/internet/filtered/loop_ex_vf_topo_caida_dnszone /dev/null

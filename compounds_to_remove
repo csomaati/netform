@@ -1,0 +1,52 @@
+'CPD-12115','ACP','ADP','ADENOSYL-HOMO-CYS','AMP','ATP','CARBON-DIOXIDE','CO-A','FAD','FADH2','FE+2','FE+3','FMN','FMNH2','PROTON','WATER','HYDROGEN-PEROXIDE','LYS','REDUCED-MENAQUINONE','NAD','NADH','NADP','NADPH','AMMONIUM','OXYGEN-MOLECULE','Pi','PPI','P3I','CPD-9956','CPD-316','RIBOFLAVIN','SO3','THF-GLU-N'
+
+
+
+
+10fthf  XXX                 
+2dmmq8  XXX
+2dmmql8	'CPD-12115'
+ACP	'ACP'
+adp	'ADP'
+ahcys	'ADENOSYL-HOMO-CYS'
+amet	ZZZ
+amp	'AMP'
+atp	'ATP'
+co2	'CARBON-DIOXIDE'
+coa	'CO-A'
+dsbdox	XXX	
+dsbdrd	XXX
+fad	'FAD'
+fadh2	'FADH2'
+fe2	'FE+2'
+fe3	'FE+3'
+flxr	XXX
+flxso	XXX
+fmn	'FMN'
+fmnh2	'FMNH2'
+grxox	XXX
+grxrd	XXX
+h	'PROTON'
+h2o	'WATER'
+h2o2	'HYDROGEN-PEROXIDE'	
+k	'LYS'
+mql8	'REDUCED-MENAQUINONE'
+mqn8	XXX
+na1	XXX
+nad	'NAD'
+nadh	'NADH'
+nadp	'NADP'
+nadph	'NADPH'
+nh4	'AMMONIUM'
+o2	'OXYGEN-MOLECULE'
+pi	'Pi'
+ppi	'PPI'	
+pppi	'P3I'
+q8	XXX
+q8h2	'CPD-9956'
+rbflvrd	'CPD-316'
+ribflv	'RIBOFLAVIN'
+so3	'SO3'
+thf	'THF-GLU-N'
+trdox	XXX
+trdrd	XXX                           
